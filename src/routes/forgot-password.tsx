@@ -1,120 +1,108 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Lock } from "lucide-react";
+import { Loader2, Mail, ArrowLeft } from "lucide-react";
 import { AuthCard } from "@/components/AuthCard";
 import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/forgot-password")({
-  head: () => ({ meta: [{ title: "Create Password — Compssa Dues" }] }),
-  component: CreatePasswordPage,
+  head: () => ({ meta: [{ title: "Reset Password — Compssa Dues" }] }),
+  component: ForgotPasswordPage,
 });
 
-function CreatePasswordPage() {
-  const navigate = useNavigate();
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+const HTU_EMAIL_DOMAIN = /@htu\.edu\.gh$/i;
+
+function ForgotPasswordPage() {
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
 
-  const handlePasswordSetup = async (e: React.FormEvent) => {
+  const handleResetRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // 1. Password Valdiations
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.");
+    if (!HTU_EMAIL_DOMAIN.test(email)) {
+      setError("Please use a valid @htu.edu.gh email address.");
       return;
     }
 
     setLoading(true);
 
-    // 2. Overwrite the user's Google auth identity profile with a local password identity
-    const { data, error: updateError } = await supabase.auth.updateUser({
-      password: password,
-    });
-
-    if (updateError) {
-      setError(updateError.message);
-      setLoading(false);
-      return;
-    }
-
-    // 3. Mark the student record table as active using the authenticated email context
-    const userEmail = data.user?.email;
-    if (userEmail) {
-      const { error: dbError } = await supabase
+    try {
+      // 1. Verify if the student exists in your database first
+      const { data: student, error: dbError } = await supabase
         .from("studenttable")
-        .update({ is_activated: true })
-        .eq("email", userEmail);
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
 
-      if (dbError) {
-        setError(dbError.message);
-        setLoading(false);
-        return;
-      }
+      if (dbError) throw new Error("Connection error, please try again.");
+      if (!student) throw new Error("No student record found with this email.");
+
+      // 2. Trigger Supabase Password Reset
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/update-password`, // Make sure you have this route
+      });
+
+      if (resetError) throw resetError;
+
+      setSuccess(true);
+    } catch (err: any) {
+      setError(err.message || "An error occurred.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-
-    // 4. Force state replace directly into the student dashboard
-    navigate({ to: "/dashboard", replace: true });
   };
 
   return (
-    <AuthCard title="Set up your password" subtitle="Create a password to complete your student profile onboarding.">
-      <form onSubmit={handlePasswordSetup} className="space-y-5">
-        {error ? <p className="text-sm text-rose-600 font-medium">{error}</p> : null}
-
-        <div className="space-y-2">
-          <Label htmlFor="password">New Password</Label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="password"
-              type="password"
-              className="pl-10 h-11"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
-          </div>
+    <AuthCard title="Reset password" subtitle="Enter your institutional email and we'll send you a link to reset your password.">
+      {success ? (
+        <div className="text-center space-y-4">
+          <p className="text-sm text-emerald-600 font-medium">
+            Password reset link sent! Please check your email inbox.
+          </p>
+          <Link to="/login" className="flex items-center justify-center gap-2 text-sm text-primary hover:underline">
+            <ArrowLeft className="h-4 w-4" /> Back to login
+          </Link>
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">Confirm Password</Label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="confirmPassword"
-              type="password"
-              className="pl-10 h-11"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-            />
+      ) : (
+        <form onSubmit={handleResetRequest} className="space-y-5">
+          {error ? <p className="text-sm text-rose-600 font-medium">{error}</p> : null}
+          
+          <div className="space-y-2">
+            <Label htmlFor="email">Institutional Email</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="email"
+                type="email"
+                className="pl-10 h-11"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="student@htu.edu.gh"
+                required
+              />
+            </div>
           </div>
-        </div>
 
-        <Button type="submit" disabled={loading} className="h-11 w-full gap-2 shadow-elegant">
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" /> Completing onboarding…
-            </>
-          ) : (
-            "Complete setup & load dashboard"
-          )}
-        </Button>
-      </form>
+          <Button type="submit" disabled={loading} className="h-11 w-full gap-2 shadow-elegant">
+            {loading ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Sending link...</>
+            ) : (
+              "Send reset link"
+            )}
+          </Button>
+          
+          <div className="text-center">
+            <Link to="/login" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Remembered your password? Sign in
+            </Link>
+          </div>
+        </form>
+      )}
     </AuthCard>
   );
 }

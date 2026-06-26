@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UpdatePasswordRouteImport } from './routes/update-password'
 import { Route as ReceiptsRouteImport } from './routes/receipts'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as PaymentSuccessRouteImport } from './routes/payment-success'
@@ -22,6 +23,11 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ActivateRouteImport } from './routes/activate'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UpdatePasswordRoute = UpdatePasswordRouteImport.update({
+  id: '/update-password',
+  path: '/update-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReceiptsRoute = ReceiptsRouteImport.update({
   id: '/receipts',
   path: '/receipts',
@@ -96,6 +102,7 @@ export interface FileRoutesByFullPath {
   '/payment-success': typeof PaymentSuccessRoute
   '/profile': typeof ProfileRoute
   '/receipts': typeof ReceiptsRoute
+  '/update-password': typeof UpdatePasswordRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/payment-success': typeof PaymentSuccessRoute
   '/profile': typeof ProfileRoute
   '/receipts': typeof ReceiptsRoute
+  '/update-password': typeof UpdatePasswordRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -125,6 +133,7 @@ export interface FileRoutesById {
   '/payment-success': typeof PaymentSuccessRoute
   '/profile': typeof ProfileRoute
   '/receipts': typeof ReceiptsRoute
+  '/update-password': typeof UpdatePasswordRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/payment-success'
     | '/profile'
     | '/receipts'
+    | '/update-password'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/payment-success'
     | '/profile'
     | '/receipts'
+    | '/update-password'
   id:
     | '__root__'
     | '/'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/payment-success'
     | '/profile'
     | '/receipts'
+    | '/update-password'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -184,10 +196,18 @@ export interface RootRouteChildren {
   PaymentSuccessRoute: typeof PaymentSuccessRoute
   ProfileRoute: typeof ProfileRoute
   ReceiptsRoute: typeof ReceiptsRoute
+  UpdatePasswordRoute: typeof UpdatePasswordRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/update-password': {
+      id: '/update-password'
+      path: '/update-password'
+      fullPath: '/update-password'
+      preLoaderRoute: typeof UpdatePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/receipts': {
       id: '/receipts'
       path: '/receipts'
@@ -288,6 +308,7 @@ const rootRouteChildren: RootRouteChildren = {
   PaymentSuccessRoute: PaymentSuccessRoute,
   ProfileRoute: ProfileRoute,
   ReceiptsRoute: ReceiptsRoute,
+  UpdatePasswordRoute: UpdatePasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
