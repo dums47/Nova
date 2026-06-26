@@ -45,12 +45,15 @@ function PaymentPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const MIN_CUSTOM_PAYMENT = 50;
+
   const amount = useMemo(() => {
     if (mode === "half") return 50;
     if (mode === "full") return 100;
     if (mode === "all") return b.outstanding;
-    const n = Number(custom);
-    return Number.isFinite(n) && n > 0 ? Math.min(n, b.outstanding) : 0;
+    const sanitized = custom.trim().replace(/,/g, "");
+    const n = Number(sanitized);
+    return Number.isFinite(n) && n > 0 ? n : 0;
   }, [mode, custom, b.outstanding]);
 
   const fee = Math.round(amount * FEE_RATE * 100) / 100;
@@ -59,7 +62,14 @@ function PaymentPage() {
  const pay = async () => {
   console.log("Current authUser object:", authUser);
   setError(null);
-  if (amount <= 0) { setError("Enter a valid amount."); return; }
+  if (amount <= 0) {
+    setError("Enter a valid amount.");
+    return;
+  }
+  if (mode === "custom" && amount < MIN_CUSTOM_PAYMENT) {
+    setError(`Custom payments must be at least GHS ${MIN_CUSTOM_PAYMENT}.`);
+    return;
+  }
   if (!PAYSTACK_PUBLIC_KEY) { setError("Missing Paystack Key."); return; }
   
   const activeFee = fees?.[0]; 
@@ -172,7 +182,14 @@ function PaymentPage() {
             {mode === "custom" && (
               <div className="mt-4 space-y-2">
                 <Label htmlFor="amount">Custom amount (GHS)</Label>
-                <Input id="amount" inputMode="decimal" placeholder="0.00" value={custom} onChange={(e) => setCustom(e.target.value)} className="h-11 text-lg" />
+                <Input
+                  id="amount"
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={custom}
+                  onChange={(e) => setCustom(e.target.value.replace(/[^0-9.]/g, ""))}
+                  className="h-11 text-lg"
+                />
               </div>
             )}
           </div>
