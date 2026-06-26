@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, useRef } from "react";
 import { supabase } from "./supabase";
 import { useAuth } from "./useAuth";
 import type { StudentRow, TransactionRow, ReceiptRow, FeeRow } from "./useAppData";
@@ -21,12 +21,11 @@ type AppContextValue = {
   markNotificationsRead: () => Promise<void>;
 };
 
-// 1. The Context Object
 export const AppCtx = createContext<AppContextValue | undefined>(undefined);
 
-// 2. The Provider Component (Named export)
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { session, user: authUser, loading: authLoading } = useAuth();
+  
   const [student, setStudent] = useState<StudentRow | null>(null);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [transactions, setTransactions] = useState<TransactionRow[]>([]);
@@ -34,23 +33,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  
+  // Use a ref to track the last loaded ID to prevent redundant fetches
+  const lastLoadedId = useRef<string | null>(null);
 
   const authId = useMemo(() => session?.user?.id ?? authUser?.auth_user_id ?? null, [session, authUser]);
   const authEmail = useMemo(() => session?.user?.email ?? null, [session]);
 
   useEffect(() => {
+    // If auth is still loading, or we have no identity, wait.
+    if (authLoading) return;
+    
+    const identity = authId ?? authEmail;
+    if (!identity) {
+      setLoading(false);
+      return;
+    }
+
+    // Prevent re-fetching if the identity hasn't changed
+    if (lastLoadedId.current === identity) {
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
     const load = async () => {
-      if (authLoading || (!authId && !authEmail)) {
-        if (mounted) setLoading(false);
-        return;
-      }
       setLoading(true);
       try {
         const { data: s } = await supabase
           .from("studenttable")
           .select(`*, department!department_id(name)`)
-          .eq(authId ? "auth_user_id" : "email", authId ?? authEmail)
+          .eq(authId ? "auth_user_id" : "email", identity)
           .maybeSingle();
 
         if (!s) {
@@ -63,8 +76,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             full_name: session?.user?.user_metadata?.full_name ?? authUser?.full_name ?? s.full_name 
         } as StudentRow;
 
-        if (mounted) setStudent(studentRow);
-
         const isAdmin = studentRow.role === 'admin';
 
         const [txRes, rcRes, fRes, stRes] = await Promise.all([
@@ -75,10 +86,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ]);
 
         if (mounted) {
+          setStudent(studentRow);
           setTransactions((txRes.data ?? []) as TransactionRow[]);
           setReceipts((rcRes.data ?? []) as ReceiptRow[]);
           setFees((fRes.data ?? []) as FeeRow[]);
           setStudents((stRes.data ?? []) as StudentRow[]);
+          lastLoadedId.current = identity; // Mark as loaded
         }
       } catch (e) {
         console.error("AppProvider load error", e);
@@ -86,9 +99,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (mounted) setLoading(false);
       }
     };
-    void load();
+
+    load();
     return () => { mounted = false; };
-  }, [authId, authEmail, authLoading]);
+  }, [authId, authEmail, authLoading]); // Dependency array is now safe
 
   const balances = useMemo(() => {
     const totalPaid = transactions.reduce((a, b) => a + Number(b.amount_paid ?? 0), 0);
@@ -106,12 +120,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }
 
-// 3. Export Hook
 export function useAppContext() {
   const v = useContext(AppCtx);
   if (!v) throw new Error("useAppContext must be used within AppProvider");
   return v;
 }
-
-
-export default AppCtx;

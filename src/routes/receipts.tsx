@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { formatGHS } from "@/lib/store";
-import { useAppData } from "@/lib/useAppData";
+import { useAppContext } from "@/lib/AppContext"; // Use Context
 import { Download, Eye, ReceiptText, X } from "lucide-react";
 import jsPDF from "jspdf";
 
@@ -13,7 +13,8 @@ export const Route = createFileRoute("/receipts")({
 });
 
 function ReceiptsPage() {
-  const { receipts, student, departmentName, transactions } = useAppData();
+  // Consuming the global state
+  const { receipts, student, transactions, loading } = useAppContext();
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
 
   const getAmount = (transactionId: string) => {
@@ -23,14 +24,10 @@ function ReceiptsPage() {
 
   const handleDownload = () => {
     if (!selectedReceipt) return;
-
     const doc = new jsPDF();
-    
-    // Header
     doc.setFontSize(22);
-    doc.text(departmentName || "Receipt", 20, 20);
+    doc.text("Compssa Dues", 20, 20);
     
-    // Receipt Data Fields
     doc.setFontSize(12);
     const data = [
       { k: "Index Number", v: student?.index_number || "N/A" },
@@ -48,6 +45,7 @@ function ReceiptsPage() {
     doc.save(`Receipt_${selectedReceipt.id.slice(0, 8)}.pdf`);
   };
 
+  if (loading) return <AppShell title="Receipts">Loading your records...</AppShell>;
   if (!student) return <AppShell title="Receipts">Not signed in.</AppShell>;
 
   return (
@@ -63,7 +61,7 @@ function ReceiptsPage() {
             </div>
             <div className="mt-4">
               <div className="text-xs uppercase tracking-wider text-muted-foreground">Department</div>
-              <div className="text-xl font-bold">{departmentName}</div>
+              <div className="text-xl font-bold">Compssa</div>
             </div>
             <dl className="mt-4 space-y-2 text-sm">
               <Row k="Date" v={new Date(r.issued_at).toLocaleDateString("en-GH", { dateStyle: "medium" })} />
@@ -79,10 +77,10 @@ function ReceiptsPage() {
       </div>
 
       {selectedReceipt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-card p-0 shadow-2xl border border-border overflow-hidden">
             <div className="flex items-center justify-between p-6 bg-primary text-primary-foreground">
-              <h2 className="text-xl font-bold">{departmentName}</h2>
+              <h2 className="text-xl font-bold">Compssa Dues</h2>
               <Button variant="ghost" size="icon" onClick={() => setSelectedReceipt(null)}>
                 <X className="h-5 w-5" />
               </Button>

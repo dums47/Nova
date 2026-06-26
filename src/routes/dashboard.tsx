@@ -78,7 +78,6 @@ function DashboardPage() {
           </div>
           <div className="mt-6 grid gap-3 md:grid-cols-2">
             {fees.map((fee) => {
-              // Matches correct db column foreign key constraints 'fee_id'
               const paid = transactions
                 .filter((t) => t.fee_id === fee.id && t.status?.toLowerCase() === "success")
                 .reduce((a, b) => a + Number(b.amount_paid ?? 0), 0);

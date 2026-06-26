@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { formatGHS } from "@/lib/store";
@@ -16,60 +16,54 @@ function AdminPage() {
   const { transactions, students, loading } = useAppContext();
   const [showStudents, setShowStudents] = useState(false);
 
-  // REAL DATA CALCULATIONS
-  const totalStudents = students.length;
-  const activeStudents = students.filter(s => s.status?.toLowerCase() === 'active').length;
-  const totalRevenue = transactions.reduce((acc, tx) => acc + Number(tx.amount_paid || 0), 0);
-  const pendingPayments = transactions.filter(tx => tx.status === 'pending').length;
+  const stats = useMemo(() => ({
+    totalRevenue: transactions.reduce((acc, tx) => acc + Number(tx.amount_paid || 0), 0),
+    pendingPayments: transactions.filter(tx => tx.status === 'pending').length,
+    activeStudents: students.filter(s => s.status?.toLowerCase() === 'active').length,
+  }), [transactions, students]);
 
-  const getMonthlyRevenue = () => {
+  const monthlyRevenue = useMemo(() => {
     const data: Record<string, number> = {};
     transactions.forEach(tx => {
       const month = new Date(tx.created_at).toLocaleString('default', { month: 'short' });
       data[month] = (data[month] || 0) + Number(tx.amount_paid);
     });
     return Object.entries(data).map(([m, revenue]) => ({ m, revenue }));
-  };
+  }, [transactions]);
 
-  const getWeeklyTrends = () => {
+  const weeklyTrends = useMemo(() => {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const data: Record<string, { success: number, failed: number }> = {};
     days.forEach(d => data[d] = { success: 0, failed: 0 });
-
     transactions.forEach(tx => {
       const day = days[new Date(tx.created_at).getDay()];
       if (tx.status === 'success') data[day].success += 1;
       else if (tx.status === 'failed') data[day].failed += 1;
     });
     return Object.entries(data).map(([d, counts]) => ({ d, ...counts }));
-  };
+  }, [transactions]);
   
   if (loading) return <AppShell title="Admin dashboard">Loading...</AppShell>;
 
   return (
     <AppShell title="Admin dashboard" subtitle="Compssa Department · Dues administration">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {/* Interactive KPI Card */}
         <div onClick={() => setShowStudents(true)} className="cursor-pointer transition-transform hover:scale-[1.02]">
-           <Kpi label="Total students" value={totalStudents.toLocaleString()} sub="Click to view list" icon={<Users className="h-5 w-5" />} tone="primary" />
+           <Kpi label="Total students" value={students.length.toLocaleString()} sub="Click to view list" icon={<Users className="h-5 w-5" />} tone="primary" />
         </div>
-        
-        <Kpi label="Total revenue" value={formatGHS(totalRevenue)} sub="Total confirmed collections" icon={<Wallet className="h-5 w-5" />} tone="success" />
-        <Kpi label="Pending payments" value={pendingPayments.toString()} sub="Transactions awaiting approval" icon={<Clock className="h-5 w-5" />} tone="warning" />
-        <Kpi label="Active students" value={activeStudents.toLocaleString()} sub="Currently active" icon={<Activity className="h-5 w-5" />} tone="accent" />
+        <Kpi label="Total revenue" value={formatGHS(stats.totalRevenue)} sub="Total confirmed collections" icon={<Wallet className="h-5 w-5" />} tone="success" />
+        <Kpi label="Pending payments" value={stats.pendingPayments.toString()} sub="Transactions awaiting approval" icon={<Clock className="h-5 w-5" />} tone="warning" />
+        <Kpi label="Active students" value={stats.activeStudents.toLocaleString()} sub="Currently active" icon={<Activity className="h-5 w-5" />} tone="accent" />
       </div>
 
-      {showStudents && (
-        <StudentListModal students={students} onClose={() => setShowStudents(false)} />
-      )}
+      {showStudents && <StudentListModal students={students} onClose={() => setShowStudents(false)} />}
 
-      {/* CHARTS SECTION */}
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <div className="rounded-2xl border border-border bg-card p-6 shadow-soft">
           <h2 className="text-lg font-semibold">Monthly revenue</h2>
           <div className="mt-6 h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={getMonthlyRevenue()}>
+              <AreaChart data={monthlyRevenue}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="m" stroke="#94a3b8" fontSize={12} />
                 <YAxis stroke="#94a3b8" fontSize={12} />
@@ -84,7 +78,7 @@ function AdminPage() {
           <h2 className="text-lg font-semibold">Payment trends</h2>
           <div className="mt-6 h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={getWeeklyTrends()}>
+              <BarChart data={weeklyTrends}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis dataKey="d" stroke="#94a3b8" fontSize={12} />
                 <Bar dataKey="success" fill="#2563EB" radius={[4, 4, 0, 0]} />

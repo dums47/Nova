@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Download, Search } from "lucide-react";
 import { formatGHS } from "@/lib/store";
 import { StatusPill } from "./dashboard";
-import { useAppData } from "@/lib/useAppData";
+import { useAppContext } from "@/lib/AppContext"; // USE THIS
 
 export const Route = createFileRoute("/history")({
   head: () => ({ meta: [{ title: "Payment History — Compssa Dues" }] }),
@@ -15,8 +15,19 @@ export const Route = createFileRoute("/history")({
 });
 
 function HistoryPage() {
-  const { transactions, student } = useAppData();
-  const txs = transactions.map((t) => ({ id: t.id, reference: t.paystack_reference, date: t.created_at ?? new Date().toISOString(), level: student?.current_level ?? 300, amount: t.amount_paid, status: (t.status === "success" ? "success" : t.status === "pending" ? "pending" : "failed") as "Success" | "Pending" | "Failed" }));
+  // Use the Single Source of Truth
+  const { transactions, student, loading } = useAppContext();
+  
+  // Memoize the mapping to avoid re-calculating on every render unless transactions change
+  const txs = useMemo(() => transactions.map((t) => ({ 
+    id: t.id, 
+    reference: t.paystack_reference, 
+    date: t.created_at ?? new Date().toISOString(), 
+    level: student?.current_level ?? 300, 
+    amount: t.amount_paid, 
+    status: (t.status === "success" ? "Success" : t.status === "pending" ? "Pending" : "Failed") as "Success" | "Pending" | "Failed" 
+  })), [transactions, student]);
+
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "Success" | "Pending" | "Failed">("all");
   const [sort, setSort] = useState<"date-desc" | "date-asc" | "amount-desc" | "amount-asc">("date-desc");
@@ -35,6 +46,8 @@ function HistoryPage() {
     return r;
   }, [txs, q, filter, sort]);
 
+  if (loading) return <AppShell title="Payment history">Loading transactions...</AppShell>;
+
   return (
     <AppShell title="Payment history" subtitle="Search, filter, and export every transaction." actions={
       <Button variant="outline" className="gap-2"><Download className="h-4 w-4" /> Export PDF</Button>
@@ -45,7 +58,7 @@ function HistoryPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input placeholder="Search by transaction ID or reference…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-10 h-10" />
           </div>
-          <Select value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
+          <Select value={filter} onValueChange={(v) => setFilter(v as any)}>
             <SelectTrigger className="md:w-40"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
@@ -54,7 +67,7 @@ function HistoryPage() {
               <SelectItem value="Failed">Failed</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={sort} onValueChange={(v) => setSort(v as typeof sort)}>
+          <Select value={sort} onValueChange={(v) => setSort(v as any)}>
             <SelectTrigger className="md:w-48"><SelectValue placeholder="Sort by" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="date-desc">Newest first</SelectItem>
@@ -87,9 +100,6 @@ function HistoryPage() {
                   <td className="px-6 py-4 text-right"><StatusPill status={t.status} /></td>
                 </tr>
               ))}
-              {rows.length === 0 && (
-                <tr><td colSpan={6} className="px-6 py-16 text-center text-muted-foreground">No transactions match your filters.</td></tr>
-              )}
             </tbody>
           </table>
         </div>
