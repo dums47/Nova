@@ -8,6 +8,7 @@ import { Eye, EyeOff, Loader2, Mail, Globe } from "lucide-react";
 import { AuthCard } from "@/components/AuthCard";
 import { supabase } from "@/lib/supabase";
 import { useAppContext } from "@/lib/AppContext";
+import { toast, Toaster } from "sonner"; // Added for the activation toast
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Sign in — Compssa Dues" }] }),
@@ -23,6 +24,18 @@ function LoginPage() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Helper to show the activation prompt
+  const showActivationToast = () => {
+    toast.info("Account Activation", {
+      description: "Please use the 'Continue with Google' button below to activate your account.",
+      duration: 6000,
+    });
+  };
+
+  useEffect(() => {
+    handleExistingSession();
+  }, []);
 
   const handleExistingSession = async () => {
     const { data } = await supabase.auth.getSession();
@@ -77,7 +90,6 @@ function LoginPage() {
         await supabase.from("studenttable").update({ auth_user_id: userId }).eq("id", student.id);
       }
 
-      // If they hit the app but haven't chosen a local password yet, forward them to setup
       if (!student.is_activated) {
         setLoading(false);
         navigate({ to: "/activate", replace: true });
@@ -96,77 +108,71 @@ function LoginPage() {
   };
 
   const submit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError(null);
-  if (!email || !pw) {
-    setError("Enter your email and password.");
-    return;
-  }
-  if (!HTU_EMAIL_DOMAIN.test(email)) {
-    setError("Access denied. Please sign in with an @htu.edu.gh email address.");
-    return;
-  }
-  setLoading(true);
+    e.preventDefault();
+    setError(null);
+    if (!email || !pw) {
+      setError("Enter your email and password.");
+      return;
+    }
+    if (!HTU_EMAIL_DOMAIN.test(email)) {
+      setError("Access denied. Please sign in with an @htu.edu.gh email address.");
+      return;
+    }
+    setLoading(true);
 
-  // 1. Authenticate with Supabase
-  const { data, error: authError } = await supabase.auth.signInWithPassword({
-    email,
-    password: pw,
-  });
+    const { data, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password: pw,
+    });
 
-  if (authError || !data.user) {
-    setError("Invalid email or password.");
-    setLoading(false);
-    return;
-  }
-
-  // 2. The Activation Gate: Check if user is activated in your DB
-  try {
-    const student = await findStudent(email, data.user.id);
-
-    if (!student || !student.is_activated) {
-      // Logic: If they aren't activated, they MUST use the Google button
-      await supabase.auth.signOut(); // Sign them out so they don't have a partial session
-      setError("Account not activated. Please use the 'Continue with Google' button to activate your account.");
+    if (authError || !data.user) {
+      setError("Invalid email or password.");
       setLoading(false);
       return;
     }
 
-    // 3. If everything is fine, proceed
-    await redirectAfterSignIn(email, data.user.id);
-  } catch (err: any) {
-    await supabase.auth.signOut();
-    setError("Error verifying activation status. Please try again.");
-    setLoading(false);
-  }
-};
+    try {
+      const student = await findStudent(email, data.user.id);
+
+      if (!student || !student.is_activated) {
+        await supabase.auth.signOut();
+        setError("Account not activated. Please use the 'Continue with Google' button to activate your account.");
+        setLoading(false);
+        return;
+      }
+
+      await redirectAfterSignIn(email, data.user.id);
+    } catch (err: any) {
+      await supabase.auth.signOut();
+      setError("Error verifying activation status. Please try again.");
+      setLoading(false);
+    }
+  };
+
   const { signInWithGoogle } = useAppContext();
 
   const continueWithGoogle = async () => {
-  setError(null);
-  setLoading(true);
-  try {
-    // Calling Supabase directly ensures options are parsed correctly
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/activate`,
-        // This forces Google to show the account picker every time during testing
-        queryParams: {
-          prompt: 'select_account'
-        }
-      },
-    });
+    setError(null);
+    setLoading(true);
+    try {
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/activate`,
+          queryParams: { prompt: 'select_account' }
+        },
+      });
 
-    if (authError) throw authError;
-  } catch (e: any) {
-    setError(e?.message ?? String(e));
-    setLoading(false);
-  }
-};
+      if (authError) throw authError;
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+      setLoading(false);
+    }
+  };
 
   return (
-    <AuthCard title="Welcome back" subtitle="Sign in to manage your departmental dues and if its your first time, please use the Google button to activate your account.">
+    <AuthCard title="Welcome back" subtitle="Sign in to manage your departmental dues">
+      <Toaster position="top-center" richColors />
       <form onSubmit={submit} className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
@@ -201,7 +207,10 @@ function LoginPage() {
         {loading ? "Redirecting to Google…" : "Continue with Google"}
       </Button>
       <p className="mt-4 text-center text-sm text-muted-foreground">
-        New here? <Link to="/activate" className="font-medium text-primary hover:underline">Activate your account</Link>
+        New here?{" "}
+        <button onClick={showActivationToast} className="font-medium text-primary hover:underline cursor-pointer bg-transparent border-none p-0">
+          Activate your account
+        </button>
       </p>
     </AuthCard>
   );
