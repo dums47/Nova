@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useRef 
 import { supabase } from "./supabase";
 import { useAuth } from "./useAuth";
 import type { StudentRow, TransactionRow, ReceiptRow, FeeRow } from "./useAppData";
+import { useQueryClient } from "@tanstack/react-query"; // Ensure this is imported
 
 type Notification = { id: string; type: "payment" | "reminder" | "announcement"; title: string; body: string; date: string; read: boolean };
 
@@ -16,6 +17,7 @@ type AppContextValue = {
   balances: { totalPaid: number; totalTarget: number; outstanding: number; completion: number };
   loading: boolean;
   notifications: Notification[];
+  isLoggingOut: boolean; // Consistent state name
   signInWithGoogle: (opts?: { redirectTo?: string }) => Promise<void>;
   signOut: () => Promise<void>;
   markNotificationsRead: () => Promise<void>;
@@ -25,6 +27,7 @@ export const AppCtx = createContext<AppContextValue | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const { session, user: authUser, loading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
   
   const [student, setStudent] = useState<StudentRow | null>(null);
   const [students, setStudents] = useState<StudentRow[]>([]);
@@ -33,16 +36,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [isLoggingOut, setIsLoggingOut] = useState(false); // Initialized to false
   
-  // Use a ref to track the last loaded ID to prevent redundant fetches
   const lastLoadedId = useRef<string | null>(null);
 
   const authId = useMemo(() => session?.user?.id ?? authUser?.auth_user_id ?? null, [session, authUser]);
   const authEmail = useMemo(() => session?.user?.email ?? null, [session]);
 
+  const signOut = async () => {
+    setIsLoggingOut(true); // Set true to trigger circuit breaker
+    queryClient.clear();
+    await supabase.auth.signOut();
+    Object.keys(localStorage).forEach(k => k.startsWith('sb-') && localStorage.removeItem(k));
+    sessionStorage.clear();
+    window.location.href = '/login';
+  };
+
   useEffect(() => {
-    // If auth is still loading, or we have no identity, wait.
-    if (authLoading) return;
+    if (authLoading || isLoggingOut) return; // Don't load if logging out
     
     const identity = authId ?? authEmail;
     if (!identity) {
@@ -50,7 +61,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Prevent re-fetching if the identity hasn't changed
     if (lastLoadedId.current === identity) {
       setLoading(false);
       return;
@@ -66,10 +76,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           .eq(authId ? "auth_user_id::uuid" : "email", identity)
           .maybeSingle();
 
-        if (!s) {
-          if (mounted) setStudent(null);
-          return;
-        }
+        if (!s) { if (mounted) setStudent(null); return; }
 
         const studentRow = { 
             ...s, 
@@ -91,31 +98,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           setReceipts((rcRes.data ?? []) as ReceiptRow[]);
           setFees((fRes.data ?? []) as FeeRow[]);
           setStudents((stRes.data ?? []) as StudentRow[]);
-          lastLoadedId.current = identity; // Mark as loaded
+          lastLoadedId.current = identity;
         }
-      } catch (e) {
-        console.error("AppProvider load error", e);
-      } finally {
-        if (mounted) setLoading(false);
-      }
+      } catch (e) { console.error("AppProvider load error", e); } 
+      finally { if (mounted) setLoading(false); }
     };
 
     load();
     return () => { mounted = false; };
-  }, [authId, authEmail, authLoading]); // Dependency array is now safe
+  }, [authId, authEmail, authLoading, isLoggingOut]);
 
   const balances = useMemo(() => {
     const totalPaid = transactions.reduce((a, b) => a + Number(b.amount_paid ?? 0), 0);
     const totalTarget = fees.reduce((a, b) => a + Number(b.target_amount ?? 0), 0);
-    const outstanding = Math.max(0, totalTarget - totalPaid);
-    const completion = totalTarget > 0 ? Math.min(100, Math.round((totalPaid / totalTarget) * 100)) : 0;
-    return { totalPaid, totalTarget, outstanding, completion };
+    return { totalPaid, totalTarget, outstanding: Math.max(0, totalTarget - totalPaid), completion: totalTarget > 0 ? Math.min(100, Math.round((totalPaid / totalTarget) * 100)) : 0 };
   }, [transactions, fees]);
 
   const value = useMemo(() => ({
-    session, authUser, student, students, transactions, receipts, fees, balances, loading, notifications,
-    signInWithGoogle: async () => {}, signOut: async () => {}, markNotificationsRead: async () => {},
-  }), [session, authUser, student, students, transactions, receipts, fees, balances, loading, notifications]);
+    session, authUser, student, students, transactions, receipts, fees, balances, loading, notifications, isLoggingOut,
+    signInWithGoogle: async () => {}, signOut, markNotificationsRead: async () => {},
+  }), [session, authUser, student, students, transactions, receipts, fees, balances, loading, notifications, isLoggingOut]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

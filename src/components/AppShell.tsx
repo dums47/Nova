@@ -1,5 +1,5 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { useState, type ReactNode } from "react";
 import { LayoutDashboard, CreditCard, History, ReceiptText, Bell, User, LogOut, Menu, ShieldCheck } from "lucide-react";
 import { Logo } from "./Logo";
 import { useAppContext } from "@/lib/AppContext";
@@ -21,11 +21,7 @@ function NavItems({ onNavigate, role }: { onNavigate?: () => void; role?: string
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { notifications } = useAppContext();
   const unread = notifications.filter((n) => !n.read).length;
-
-  const visibleNavItems = NAV.filter((item) => {
-    if (item.to === "/admin") return role?.toLowerCase() === "admin";
-    return true;
-  });
+  const visibleNavItems = NAV.filter((item) => { if (item.to === "/admin") return role?.toLowerCase() === "admin"; return true; });
 
   return (
     <nav className="flex flex-col gap-1 p-3">
@@ -48,10 +44,7 @@ function NavItems({ onNavigate, role }: { onNavigate?: () => void; role?: string
   );
 }
 
-function SidebarInner({ onNavigate, student }: { onNavigate?: () => void; student?: any }) {
-  const navigate = useNavigate();
-  const { signOut } = useAppContext();
-  
+function SidebarInner({ onNavigate, student, onLogout }: { onNavigate?: () => void; student?: any; onLogout: () => void }) {
   return (
     <div className="flex h-full flex-col bg-sidebar border-r border-sidebar-border">
       <div className="p-5 border-b border-sidebar-border"><Logo /></div>
@@ -68,8 +61,11 @@ function SidebarInner({ onNavigate, student }: { onNavigate?: () => void; studen
             <div className="truncate text-xs text-muted-foreground">{student?.index_number ?? ""}</div>
           </div>
         </div>
-        <Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive"
-          onClick={async () => { await signOut(); navigate({ to: "/login" }); }}>
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive"
+          onClick={onLogout}
+        >
           <LogOut className="h-4 w-4" /> Logout
         </Button>
       </div>
@@ -78,23 +74,21 @@ function SidebarInner({ onNavigate, student }: { onNavigate?: () => void; studen
 }
 
 export function AppShell({ children, title, subtitle, actions }: { children: ReactNode; title?: string; subtitle?: string; actions?: ReactNode }) {
-  const navigate = useNavigate();
-  // USE ONLY THE CONTEXT - This is your single source of truth
-  const { student, session, loading } = useAppContext();
+  const { student, loading, signOut } = useAppContext();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  // Unified Auth Guard
-  useEffect(() => {
-    if (!loading && !session) {
-      navigate({ to: "/login" });
-    }
-  }, [loading, session, navigate]);
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    await signOut();
+  };
 
+  if (isLoggingOut) return <div className="min-h-screen bg-background" />;
   if (loading) return <div className="flex min-h-screen items-center justify-center">Loading...</div>;
 
   return (
     <div className="flex min-h-screen bg-background">
       <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
-        <SidebarInner student={student} />
+        <SidebarInner student={student} onLogout={handleLogout} />
       </aside>
       <div className="flex-1 md:pl-64">
         <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
@@ -103,7 +97,7 @@ export function AppShell({ children, title, subtitle, actions }: { children: Rea
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="md:hidden"><Menu className="h-5 w-5" /></Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-0 w-72"><SidebarInner student={student} /></SheetContent>
+              <SheetContent side="left" className="p-0 w-72"><SidebarInner student={student} onLogout={handleLogout} /></SheetContent>
             </Sheet>
             <div className="flex-1 min-w-0">
               {title && <h1 className="text-xl md:text-2xl font-semibold tracking-tight truncate">{title}</h1>}
