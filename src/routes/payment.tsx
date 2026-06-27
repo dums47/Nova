@@ -24,21 +24,15 @@ export const Route = createFileRoute("/payment")({
   component: PaymentPage,
 });
 
-async function verifyPayment(reference: string) {
-  const response = await fetch("/api/paystack/verify", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ reference }),
-  });
-  if (!response.ok) throw new Error("Verification failed.");
-  return await response.json();
-}
-
 function PaymentPage() {
   const navigate = useNavigate();
   const { student, balances, fees } = useAppData();
-  const { user: authUser } = useAuth();
+  const { user: authUser, session } = useAuth();
   const b = balances;
+  const authUserId = authUser?.auth_user_id ?? session?.user?.id ?? null;
+  console.log("DEBUG: authUser object:", authUser);
+  console.log("DEBUG: session object:", session);
+  console.log("DEBUG: Resolved authUserId:", authUserId);
 
   const [mode, setMode] = useState<"half" | "full" | "custom" | "all">("half");
   const [custom, setCustom] = useState<string>("");
@@ -59,88 +53,71 @@ function PaymentPage() {
   const fee = Math.round(amount * FEE_RATE * 100) / 100;
   const total = Math.round((amount + fee) * 100) / 100;
 
- const pay = async () => {
-  console.log("Current authUser object:", authUser);
-  setError(null);
-  if (amount <= 0) {
-    setError("Enter a valid amount.");
-    return;
-  }
-  if (mode === "custom" && amount < MIN_CUSTOM_PAYMENT) {
-    setError(`Custom payments must be at least GHS ${MIN_CUSTOM_PAYMENT}.`);
-    return;
-  }
-  if (!PAYSTACK_PUBLIC_KEY) { setError("Missing Paystack Key."); return; }
-  
-  const activeFee = fees?.[0]; 
-  if (!activeFee) { setError("Payment system initializing..."); return; }
+  const pay = async () => {
+    console.log("1. Pay button clicked");
+    setError(null);
+    setLoading(true);
 
-  setLoading(true);
-
-  // 1. Define the internal handler as a standard function
-  const handleSuccess = (response: { reference: string }) => {
-    // We execute the async logic inside, but the callback itself is a standard function
-    verifyPayment(response.reference)
-      .then(async (verified) => {
-        if (!verified.status) throw new Error("Verification failed.");
-
-        const { error } = await supabase
-          .from("transactions_table")
-          .insert({
-            amount_paid: total,
-            paystack_reference: response.reference,
-            status: "success", 
-            source_account: "Paystack",
-            fee_id: activeFee.id,
-            index_number: student?.index_number,
-            auth_user_id: (authUser as any)?.auth_user_id
-       });
+    // This is the function logic that Paystack requires as a valid callback
+    const handleSuccess = async (res: { reference: string }) => {
+      try {
+        const { error } = await supabase.functions.invoke('verify-paystack', {
+          body: { 
+           reference: res.reference, 
+        amount: total, 
+        fee_id: fees?.[0]?.id, 
+        index_number: student?.index_number, 
+        auth_user_id: authUserId
+          }
+        });
 
         if (error) throw error;
-
-        navigate({ to: "/payment-success", search: { ref: response.reference, amount: total } });
-      })
-      .catch((err) => {
-        console.error("PAYSTACK_FULL_ERROR:", err);
-        setError("Payment succeeded but failed to save.");
+        navigate({ to: "/payment-success", search: { ref: res.reference, amount: total } });
+      } catch (err) {
+        console.error("Database save failed:", err);
+        setError("Payment succeeded, but we couldn't save it.");
         setLoading(false);
-      });
-  };
-  if (error) {
-        console.error("SUPABASE_INSERT_ERROR:", error); // This will show why it fails
-        throw error;
+      }
+    };
+
+    try {
+      if (!window.PaystackPop) {
+        console.log("2. Loading script manually...");
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://js.paystack.co/v1/inline.js";
+          script.onload = () => { console.log("3. Script loaded"); resolve(); };
+          script.onerror = () => { console.error("3. Script load error"); reject(); };
+          document.body.appendChild(script);
+        });
+      } else {
+        console.log("2. Script already exists");
       }
 
-  try {
-    // 2. Load script
-    await new Promise<void>((resolve, reject) => {
-      if (window.PaystackPop) return resolve();
-      const script = document.createElement("script");
-      script.src = "https://js.paystack.co/v1/inline.js";
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = (e) => reject(new Error("Network error loading Paystack."));
-      document.body.appendChild(script);
-    });
+      console.log("4. Setting up handler with key:", PAYSTACK_PUBLIC_KEY ? "Present" : "Missing");
 
-    // 3. Initialize Paystack
-    const handler = window.PaystackPop.setup({
-      key: PAYSTACK_PUBLIC_KEY,
-      email: authUser?.email ?? "",
-      amount: Math.round(total * 100),
-      currency: "GHS",
-      ref: genRef(),
-      callback: handleSuccess, // Passing the standard function
-      onClose: () => setLoading(false),
-    });
+      const handler = window.PaystackPop.setup({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: authUser?.email || "test@example.com",
+        amount: Math.round(total * 100),
+        currency: "GHS",
+        ref: genRef(),
+        // We wrap the call so Paystack receives a stable function
+        callback: (res: any) => handleSuccess(res),
+        onClose: () => {
+          console.log("Closed");
+          setLoading(false);
+        },
+      });
 
-    handler.openIframe();
-  } catch (err) {
-    console.error("Initialization Error:", err);
-    setError("Failed to open payment portal.");
-    setLoading(false);
-  }
-};
+      console.log("5. Attempting to open iframe...");
+      handler.openIframe();
+    } catch (err) {
+      console.error("FATAL ERROR:", err);
+      setError("Failed to open. Check Console.");
+      setLoading(false);
+    }
+  };
 
   const options = [
     { id: "half", title: "Half Payment", amount: 50, desc: "Pay half of one level's dues" },

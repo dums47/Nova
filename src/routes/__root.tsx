@@ -5,10 +5,9 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
-  HeadContent,
-  Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { supabase } from "@/lib/supabase";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -86,22 +85,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Compssa Dues — Pay Your Departmental Dues" },
-      { name: "description", content: "Modern payment platform for Compssa Department dues. Pay securely with Paystack." },
+      { name: "description", content: "Modern payment platform for Compssa Department dues." },
       { name: "author", content: "Compssa Department" },
-      { property: "og:title", content: "Compssa Dues — Pay Your Departmental Dues" },
-      { property: "og:description", content: "Modern payment platform for Compssa Department dues." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+    ],
+    // The CSS-based guard: hides the page until it's ready to show
+    scripts: [
+      {
+        innerHTML: `
+          document.documentElement.style.visibility = 'hidden';
+          window.addEventListener('load', () => {
+            document.documentElement.style.visibility = 'visible';
+          });
+        `
+      }
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" },
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
     ],
   }),
   shellComponent: RootShell,
@@ -116,11 +118,22 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    // Ensure we know the auth state before showing the App UI
+    supabase.auth.getSession().then(() => {
+      setIsAuthReady(true);
+    });
+  }, []);
+
+  if (!isAuthReady) {
+    return <div className="h-screen w-full bg-background" />;
+  }
 
   return (
     <QueryClientProvider client={queryClient}>
       <AppProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
       </AppProvider>
     </QueryClientProvider>

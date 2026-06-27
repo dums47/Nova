@@ -63,7 +63,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const { data: s } = await supabase
           .from("studenttable")
           .select(`*, department!department_id(name)`)
-          .eq(authId ? "auth_user_id" : "email", identity)
+          .eq(authId ? "auth_user_id::uuid" : "email", identity)
           .maybeSingle();
 
         if (!s) {

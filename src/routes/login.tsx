@@ -1,5 +1,5 @@
-﻿import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+﻿import { createFileRoute, Link, useNavigate, redirect } from "@tanstack/react-router";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,10 +8,17 @@ import { Eye, EyeOff, Loader2, Mail, Globe } from "lucide-react";
 import { AuthCard } from "@/components/AuthCard";
 import { supabase } from "@/lib/supabase";
 import { useAppContext } from "@/lib/AppContext";
-import { toast, Toaster } from "sonner"; // Added for the activation toast
+import { toast, Toaster } from "sonner";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Sign in — Compssa Dues" }] }),
+  // This blocks the Login Page from ever mounting if a session exists
+  beforeLoad: async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   component: LoginPage,
 });
 
@@ -25,28 +32,11 @@ function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper to show the activation prompt
   const showActivationToast = () => {
     toast.info("Account Activation", {
       description: "Please use the 'Continue with Google' button below to activate your account.",
       duration: 6000,
     });
-  };
-
-  useEffect(() => {
-    handleExistingSession();
-  }, []);
-
-  const handleExistingSession = async () => {
-    const { data } = await supabase.auth.getSession();
-    const user = data.session?.user;
-    if (!user) return;
-    if (!HTU_EMAIL_DOMAIN.test(user.email ?? "")) {
-      setError("Access denied. Please sign in with an @htu.edu.gh email address.");
-      await supabase.auth.signOut();
-      return;
-    }
-    await redirectAfterSignIn(user.email ?? "", user.id);
   };
 
   const findStudent = async (email: string, userId?: string) => {
@@ -133,14 +123,12 @@ function LoginPage() {
 
     try {
       const student = await findStudent(email, data.user.id);
-
       if (!student || !student.is_activated) {
         await supabase.auth.signOut();
         setError("Account not activated. Please use the 'Continue with Google' button to activate your account.");
         setLoading(false);
         return;
       }
-
       await redirectAfterSignIn(email, data.user.id);
     } catch (err: any) {
       await supabase.auth.signOut();
@@ -162,7 +150,6 @@ function LoginPage() {
           queryParams: { prompt: 'select_account' }
         },
       });
-
       if (authError) throw authError;
     } catch (e: any) {
       setError(e?.message ?? String(e));
