@@ -1,9 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { formatGHS } from "@/lib/store";
-import { useAppContext } from "@/lib/AppContext"; // Use Context
+import { useAppContext } from "@/lib/AppContext";
 import { Download, Eye, ReceiptText, X } from "lucide-react";
 import jsPDF from "jspdf";
 
@@ -13,14 +13,8 @@ export const Route = createFileRoute("/receipts")({
 });
 
 function ReceiptsPage() {
-  // Consuming the global state
-  const { receipts, student, transactions, loading } = useAppContext();
+  const { receipts, student, loading } = useAppContext();
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
-
-  const getAmount = (transactionId: string) => {
-    const tx = transactions.find((t) => t.id === transactionId);
-    return tx ? tx.amount_paid : 0;
-  };
 
   const handleDownload = () => {
     if (!selectedReceipt) return;
@@ -31,7 +25,7 @@ function ReceiptsPage() {
     doc.setFontSize(12);
     const data = [
       { k: "Index Number", v: student?.index_number || "N/A" },
-      { k: "Amount Paid", v: formatGHS(getAmount(selectedReceipt.transaction_id)) },
+      { k: "Amount Paid", v: formatGHS(selectedReceipt.amount_paid || 0) },
       { k: "Beneficiary", v: selectedReceipt.beneficiary_account },
       { k: "Level", v: selectedReceipt.level },
       { k: "Provider", v: selectedReceipt.provider },
@@ -51,7 +45,7 @@ function ReceiptsPage() {
   return (
     <AppShell title="Receipts" subtitle="View details of your successful payments.">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {receipts.map((r) => (
+        {receipts.map((r: any) => (
           <div key={r.id} className="rounded-2xl border border-border bg-card p-6 shadow-soft">
             <div className="flex items-start justify-between">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -88,7 +82,7 @@ function ReceiptsPage() {
             
             <div className="p-6 space-y-4 bg-white">
               <StaticRow k="Index Number" v={student.index_number || "N/A"} />
-              <StaticRow k="Amount Paid" v={formatGHS(getAmount(selectedReceipt.transaction_id))} />
+              <StaticRow k="Amount Paid" v={formatGHS(selectedReceipt.amount_paid || 0)} />
               <StaticRow k="Beneficiary" v={selectedReceipt.beneficiary_account} />
               <StaticRow k="Level" v={selectedReceipt.level} />
               <StaticRow k="Provider" v={selectedReceipt.provider} />

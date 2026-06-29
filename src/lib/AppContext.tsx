@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useRef 
 import { supabase } from "./supabase";
 import { useAuth } from "./useAuth";
 import type { StudentRow, TransactionRow, ReceiptRow, FeeRow } from "./useAppData";
-import { useQueryClient } from "@tanstack/react-query"; // Ensure this is imported
+import { useQueryClient } from "@tanstack/react-query";
 
 type Notification = { id: string; type: "payment" | "reminder" | "announcement"; title: string; body: string; date: string; read: boolean };
 
@@ -17,7 +17,7 @@ type AppContextValue = {
   balances: { totalPaid: number; totalTarget: number; outstanding: number; completion: number };
   loading: boolean;
   notifications: Notification[];
-  isLoggingOut: boolean; // Consistent state name
+  isLoggingOut: boolean;
   signInWithGoogle: (opts?: { redirectTo?: string }) => Promise<void>;
   signOut: () => Promise<void>;
   markNotificationsRead: () => Promise<void>;
@@ -36,7 +36,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [fees, setFees] = useState<FeeRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoggingOut, setIsLoggingOut] = useState(false); // Initialized to false
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   
   const lastLoadedId = useRef<string | null>(null);
 
@@ -44,7 +44,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const authEmail = useMemo(() => session?.user?.email ?? null, [session]);
 
   const signOut = async () => {
-    setIsLoggingOut(true); // Set true to trigger circuit breaker
+    setIsLoggingOut(true);
     queryClient.clear();
     await supabase.auth.signOut();
     Object.keys(localStorage).forEach(k => k.startsWith('sb-') && localStorage.removeItem(k));
@@ -53,7 +53,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    if (authLoading || isLoggingOut) return; // Don't load if logging out
+    if (authLoading || isLoggingOut) return;
     
     const identity = authId ?? authEmail;
     if (!identity) {
@@ -94,8 +94,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (mounted) {
           setStudent(studentRow);
-          setTransactions((txRes.data ?? []) as TransactionRow[]);
-          setReceipts((rcRes.data ?? []) as ReceiptRow[]);
+          const txs = (txRes.data ?? []) as TransactionRow[];
+          setTransactions(txs);
+
+          // Map the transaction amount to each receipt object
+          const receiptsWithAmount = ((rcRes.data ?? []) as any[]).map((r) => {
+            const matchingTx = txs.find((t) => t.id === r.transaction_id);
+            return { 
+              ...r, 
+              amount_paid: matchingTx ? matchingTx.amount_paid : 0 
+            };
+          });
+
+          setReceipts(receiptsWithAmount as ReceiptRow[]);
           setFees((fRes.data ?? []) as FeeRow[]);
           setStudents((stRes.data ?? []) as StudentRow[]);
           lastLoadedId.current = identity;
@@ -110,9 +121,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const balances = useMemo(() => {
     const totalPaid = transactions.reduce((a, b) => a + Number(b.amount_paid ?? 0), 0);
-    const totalTarget = fees.reduce((a, b) => a + Number(b.target_amount ?? 0), 0);
-    return { totalPaid, totalTarget, outstanding: Math.max(0, totalTarget - totalPaid), completion: totalTarget > 0 ? Math.min(100, Math.round((totalPaid / totalTarget) * 100)) : 0 };
-  }, [transactions, fees]);
+    const relevantFees = fees.filter(f => f.department_id === student?.department_id);
+    const totalTarget = relevantFees.reduce((a, b) => a + Number(b.target_amount ?? 0), 0);
+    
+    return { 
+      totalPaid, 
+      totalTarget, 
+      outstanding: Math.max(0, totalTarget - totalPaid), 
+      completion: totalTarget > 0 ? Math.min(100, Math.round((totalPaid / totalTarget) * 100)) : 0 
+    };
+  }, [transactions, fees, student?.department_id]);
 
   const value = useMemo(() => ({
     session, authUser, student, students, transactions, receipts, fees, balances, loading, notifications, isLoggingOut,

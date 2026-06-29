@@ -112,24 +112,16 @@ function DashboardPage() {
               return (
                 <div key={fee.id} className="rounded-xl border border-border p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className={`h-10 w-10 shrink-0 rounded-lg flex items-center justify-center font-semibold text-sm ${
-                          fully
-                            ? "bg-success/15 text-success"
-                            : partly
-                            ? "bg-warning/15 text-warning"
-                            : "bg-secondary text-muted-foreground"
-                        }`}
-                      >
-                        {fee.fee_name}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{fee.fee_name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatGHS(paid)} / {formatGHS(targetAmount)}
-                        </div>
-                      </div>
+                    <div
+                      className={`h-10 w-10 shrink-0 rounded-lg flex items-center justify-center text-center font-semibold text-[10px] leading-tight px-1 break-words ${
+                        fully
+                          ? "bg-success/15 text-success"
+                          : partly
+                          ? "bg-warning/15 text-warning"
+                          : "bg-secondary text-muted-foreground"
+                      }`}
+                    >
+                      {fee.fee_name}
                     </div>
                     <Pill tone={fully ? "success" : partly ? "warning" : "muted"}>
                       {fully ? "Paid" : partly ? "Partial" : "Pending"}

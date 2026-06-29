@@ -22,22 +22,26 @@ function SuccessPage() {
   const { ref = "N/A", amount = 0 } = Route.useSearch();
   const [txn, setTxn] = useState<{ id: string } | null>(null);
 
-  // Fetch the actual transaction ID created by the database
   useEffect(() => {
+    if (ref === "N/A") return;
+
     const fetchTransaction = async () => {
+      // Because the trigger handles receipt creation immediately on insert,
+      // we only need to fetch the transaction details.
       const { data, error } = await supabase
-        .from("transactions_table")
+        .from("transactions")
         .select("id")
         .eq("paystack_reference", ref)
-        .single();
-      
-      if (data) setTxn(data);
-      if (error) console.error("Error fetching txn ID:", error);
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching transaction:", error);
+      } else {
+        setTxn(data);
+      }
     };
-    
-    if (ref !== "N/A") {
-      fetchTransaction();
-    }
+
+    fetchTransaction();
   }, [ref]);
 
   return (
@@ -51,12 +55,14 @@ function SuccessPage() {
             </div>
           </div>
           <h1 className="mt-6 text-3xl font-bold tracking-tight">Payment successful</h1>
-          <p className="mt-2 text-muted-foreground">Thank you. Your dues payment has been received and recorded.</p>
+          <p className="mt-2 text-muted-foreground">
+            Thank you. Your dues payment has been received and recorded.
+          </p>
 
           <div className="mt-8 rounded-xl bg-secondary/50 p-6 text-left">
             <Row k="Amount paid" v={<span className="font-bold text-foreground">{formatGHS(amount)}</span>} />
             <div className="my-3 h-px bg-border" />
-            <Row k="Transaction ID" v={<span className="font-mono text-sm">{txn?.id || "Loading..."}</span>} />
+            <Row k="Transaction ID" v={<span className="font-mono text-sm">{txn?.id || "Processing..."}</span>} />
             <div className="my-3 h-px bg-border" />
             <Row k="Reference" v={<span className="font-mono text-sm">{ref}</span>} />
             <div className="my-3 h-px bg-border" />

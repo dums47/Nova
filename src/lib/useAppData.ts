@@ -25,6 +25,7 @@ export type TransactionRow = {
   fee_id: string;
   index_number: string; 
   created_at: string;
+  transactions?: { amount_paid: number } | null;
 };
 
 export type ReceiptRow = {
@@ -37,12 +38,14 @@ export type ReceiptRow = {
   provider: string;
   narration: string;
   issued_at: string;
+  amount_paid?: number; 
 };
 
 export type FeeRow = {
   id: string;
   fee_name: string;
   target_amount: number;
+  department_id: number;
 };
 
 // --- Hook ---

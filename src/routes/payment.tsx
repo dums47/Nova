@@ -9,7 +9,6 @@ import { useAuth } from "@/lib/useAuth";
 import { useAppData } from "@/lib/useAppData";
 
 const FEE_RATE = 0.015;
-const DUES_AMOUNT = 100;
 const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 
 declare global {
@@ -27,40 +26,76 @@ function PaymentPage() {
   const navigate = useNavigate();
   const { student, balances, fees } = useAppData();
   const { user: authUser, session } = useAuth();
+  
+  // DEBUGGING: These logs will reveal where the 100/500 value originates
+  console.log("Raw Fees Array from AppContext:", fees);
+  console.log("Current Student Dept ID:", student?.department_id);
+
   const b = balances;
   const authUserId = authUser?.auth_user_id ?? session?.user?.id ?? null;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const amount = DUES_AMOUNT;
+  // Pick the fee that matches the student's department, fall back to the first fee
+  const departmentFee = useMemo(() => {
+    if (!fees || fees.length === 0) return null;
+    
+    // Using Number() ensures type mismatch doesn't break the lookup
+    const found = fees.find((f) => Number(f.department_id) === Number(student?.department_id));
+    
+    console.log("Found Fee Object:", found);
+    return found ?? fees[0];
+  }, [fees, student?.department_id]);
+
+  const amount = Number(departmentFee?.target_amount ?? 0);
   const fee = Math.round(amount * FEE_RATE * 100) / 100;
   const total = Math.round((amount + fee) * 100) / 100;
 
   const pay = async () => {
+    if (!departmentFee) {
+      setError("No dues amount found for your department. Please contact admin.");
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
     const handleSuccess = async (res: { reference: string }) => {
-      try {
-        const { error } = await supabase.functions.invoke("verify-paystack", {
-          body: {
-            reference: res.reference,
-            amount: total,
-            fee_id: fees?.[0]?.id,
-            index_number: student?.index_number,
-            auth_user_id: authUserId,
-          },
-        });
+    try {
+      const { data, error } = await supabase.functions.invoke("verify-paystack", {
+        body: {
+          reference: res.reference,
+          amount: total,
+          fee_id: departmentFee.id,
+          index_number: student?.index_number,
+          auth_user_id: authUserId,
+        },
+      });
 
-        if (error) throw error;
-        navigate({ to: "/payment-success", search: { ref: res.reference, amount: total } });
-      } catch (err) {
-        console.error("Database save failed:", err);
-        setError("Payment succeeded, but we couldn't save it.");
+      // supabase.functions.invoke puts HTTP error bodies in `error.context`
+      if (error) {
+        // Try to extract the actual message from the edge function response
+        let message = "Payment succeeded, but we couldn't save it.";
+        try {
+          const body = await error.context?.json?.();
+          if (body?.error) message = body.error;
+          if (body?.detail) message += `: ${body.detail}`;
+        } catch (_) {}
+        console.error("Edge function error:", error, message);
+        setError(message);
         setLoading(false);
+        return; // don't navigate
       }
-    };
+
+    // Only navigate if truly successful
+    navigate({ to: "/payment-success", search: { ref: res.reference, amount: total } });
+  } catch (err: any) {
+    console.error("Database save failed:", err);
+    setError("Payment succeeded, but we couldn't save it. Please contact support with ref: " + res.reference);
+    setLoading(false);
+  }
+};
 
     try {
       if (!window.PaystackPop) {
@@ -94,7 +129,7 @@ function PaymentPage() {
   };
 
   return (
-    <AppShell title="Make a payment" subtitle="Pay your departmental dues of GHS 100.">
+    <AppShell title="Make a payment" subtitle={`Pay your departmental dues of ${formatGHS(amount)}.`}>
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary to-accent p-6 text-primary-foreground shadow-elegant">
@@ -113,11 +148,10 @@ function PaymentPage() {
             <h2 className="text-lg font-semibold">Payment details</h2>
             <div className="mt-4">
               <div className="rounded-xl border-2 border-primary bg-primary/5 ring-2 ring-primary/20 p-5">
-                <div className="font-semibold text-foreground">Departmental Dues</div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  Fixed annual departmental dues — GHS 100 per level
+                <div className="font-semibold text-foreground">
+                  {departmentFee?.fee_name ?? "Departmental Dues"}
                 </div>
-                <div className="mt-4 text-3xl font-bold text-foreground">{formatGHS(DUES_AMOUNT)}</div>
+                <div className="mt-4 text-3xl font-bold text-foreground">{formatGHS(amount)}</div>
               </div>
             </div>
           </div>
@@ -125,7 +159,6 @@ function PaymentPage() {
 
         <aside className="rounded-2xl border border-border bg-card p-6 shadow-soft h-fit">
           <h2 className="text-lg font-semibold">Payment summary</h2>
-
           <div className="mt-4 space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Dues amount</span>
@@ -145,7 +178,7 @@ function PaymentPage() {
 
           <Button
             onClick={pay}
-            disabled={loading}
+            disabled={loading || !departmentFee}
             className="mt-6 h-14 w-full gap-2 text-base font-semibold"
           >
             {loading ? (
