@@ -23,6 +23,12 @@ const EMPTY_FORM = {
   department_id: "",
 };
 
+const ALLOWED_EMAIL_DOMAIN = "@htu.edu.gh";
+
+function isAllowedEmail(email: string) {
+  return email.trim().toLowerCase().endsWith(ALLOWED_EMAIL_DOMAIN);
+}
+
 function ImportStudentsPage() {
   const { students } = useAppContext();
 
@@ -62,6 +68,8 @@ function ImportStudentsPage() {
       const results: ResultRow[] = [];
 
       for (const row of rows) {
+        if (!row.trim()) continue;
+
         const values = row.split(",").map((v) => v.trim());
         const record: Record<string, string> = {};
         headers.forEach((h, i) => (record[h] = values[i] ?? ""));
@@ -69,14 +77,38 @@ function ImportStudentsPage() {
         const index_number = record["index_number"] ?? record["index number"] ?? "";
         if (!index_number) continue;
 
-        try {
-          const { error } = await supabase.from("students").upsert({
-            full_name: record["full_name"] ?? record["full name"] ?? "",
+        const email = record["email"] ?? "";
+
+        // Validate domain before attempting any insert
+        if (!email) {
+          results.push({ index_number, status: "error", message: "Missing email." });
+          continue;
+        }
+        if (!isAllowedEmail(email)) {
+          results.push({
             index_number,
-            email: record["email"] ?? "",
-            current_level: Number(record["current_level"] ?? record["level"] ?? 100),
-            department_id: record["department_id"] ?? record["department"] ?? null,
-          }, { onConflict: "index_number" });
+            status: "error",
+            message: `Rejected: email must end with ${ALLOWED_EMAIL_DOMAIN}`,
+          });
+          continue;
+        }
+
+        const rawDept = record["department_id"] ?? record["department"] ?? "";
+        const rawLevel = record["current_level"] ?? record["level"] ?? "";
+
+        try {
+          // NOTE: auth_user_id is intentionally omitted — it is only ever
+          // set later when the student links their auth.users account.
+          const { error } = await supabase.from("studenttable").upsert(
+            {
+              email,
+              full_name: record["full_name"] ?? record["full name"] ?? "",
+              current_level: rawLevel ? Number(rawLevel) : 100,
+              department_id: rawDept ? Number(rawDept) : null,
+              index_number,
+            },
+            { onConflict: "index_number" }
+          );
 
           results.push({
             index_number,
@@ -105,15 +137,24 @@ function ImportStudentsPage() {
       return;
     }
 
+    if (!isAllowedEmail(form.email)) {
+      setSingleError(`Email must be an ${ALLOWED_EMAIL_DOMAIN} address.`);
+      return;
+    }
+
     setSingleLoading(true);
     try {
-      const { error } = await supabase.from("students").upsert({
-        full_name: form.full_name.trim(),
-        index_number: form.index_number.trim(),
-        email: form.email.trim(),
-        current_level: Number(form.current_level) || 100,
-        department_id: form.department_id || null,
-      }, { onConflict: "index_number" });
+      // NOTE: auth_user_id is intentionally omitted here too.
+      const { error } = await supabase.from("studenttable").upsert(
+        {
+          full_name: form.full_name.trim(),
+          index_number: form.index_number.trim(),
+          email: form.email.trim(),
+          current_level: Number(form.current_level) || 100,
+          department_id: form.department_id ? Number(form.department_id) : null,
+        },
+        { onConflict: "index_number" }
+      );
 
       if (error) throw error;
 
@@ -203,14 +244,14 @@ function ImportStudentsPage() {
           <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl">
             <div className="flex items-center justify-between p-6 border-b border-border">
               <h2 className="text-lg font-semibold">Add New Student</h2>
-            <button
-  type="button"
-  aria-label="Close"
-  onClick={closeAddModal}
-  className="text-muted-foreground hover:text-foreground transition"
->
-  <X className="h-5 w-5" />
-</button>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={closeAddModal}
+                className="text-muted-foreground hover:text-foreground transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
             <div className="p-6 space-y-4">
@@ -229,7 +270,7 @@ function ImportStudentsPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="e.g. john@example.com"
+                    placeholder="e.g. john@htu.edu.gh"
                     value={form.email}
                     onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
                   />
@@ -262,8 +303,9 @@ function ImportStudentsPage() {
                   <Input
                     id="department_id"
                     placeholder="e.g. 1"
+                    inputMode="numeric"
                     value={form.department_id}
-                    onChange={(e) => setForm((p) => ({ ...p, department_id: e.target.value }))}
+                    onChange={(e) => setForm((p) => ({ ...p, department_id: e.target.value.replace(/\D/g, "") }))}
                   />
                 </div>
               </div>
@@ -292,14 +334,14 @@ function ImportStudentsPage() {
           <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl">
             <div className="flex items-center justify-between p-6 border-b border-border">
               <h2 className="text-lg font-semibold">Upload CSV</h2>
-             <button
-  type="button"
-  aria-label="Close"
-  onClick={closeCsvModal}
-  className="text-muted-foreground hover:text-foreground transition"
->
-  <X className="h-5 w-5" />
-</button>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={closeCsvModal}
+                className="text-muted-foreground hover:text-foreground transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
             <div className="p-6 space-y-4">
@@ -308,8 +350,11 @@ function ImportStudentsPage() {
                 <p className="text-sm text-muted-foreground mb-1">
                   CSV must include:
                 </p>
-                <p className="font-mono text-xs text-muted-foreground mb-4">
-                  full_name, index_number, email, current_level, department_id
+                <p className="font-mono text-xs text-muted-foreground mb-1">
+                  email,full_name, current_level, department_id,index_number
+                </p>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Only {ALLOWED_EMAIL_DOMAIN} emails will be imported.
                 </p>
                 <Input
                   ref={fileInputRef}
@@ -362,3 +407,5 @@ function ImportStudentsPage() {
     </AppShell>
   );
 }
+
+export default ImportStudentsPage;
