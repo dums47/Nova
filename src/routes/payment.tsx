@@ -27,11 +27,14 @@ function PaymentPage() {
   const { student, balances, fees } = useAppData();
   const { user: authUser, session } = useAuth();
 
-  console.log("Raw Fees Array from AppContext:", fees);
-  console.log("Current Student Dept ID:", student?.department_id);
-
   const b = balances;
   const authUserId = authUser?.auth_user_id ?? session?.user?.id ?? null;
+
+  // Same raw-DB-field logic as the dashboard: a negative outstanding_balance
+  // from the update_student_balance trigger means overpaid/cleared.
+  const rawOutstandingNum = Number(student?.outstanding_balance ?? 0);
+  const isFullyPaid = rawOutstandingNum < 0;
+  const displayOutstanding = Math.round(Math.abs(rawOutstandingNum));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +43,6 @@ function PaymentPage() {
   const departmentFee = useMemo(() => {
     if (!fees || fees.length === 0) return null;
     const found = fees.find((f) => Number(f.department_id) === Number(student?.department_id));
-    console.log("Found Fee Object:", found);
     return found ?? fees[0];
   }, [fees, student?.department_id]);
 
@@ -136,7 +138,12 @@ function PaymentPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs uppercase tracking-widest opacity-80">Outstanding balance</div>
-                <div className="mt-2 text-4xl font-bold">{formatGHS(b.outstanding)}</div>
+                <div className={`mt-2 text-4xl font-bold ${isFullyPaid ? "text-success" : "text-primary-foreground"}`}>
+                  {formatGHS(displayOutstanding)}
+                </div>
+                {isFullyPaid && (
+                  <div className="mt-1 text-xs font-medium opacity-90">All cleared</div>
+                )}
               </div>
               <div className="hidden md:flex h-20 w-20 rounded-2xl bg-white/10 backdrop-blur items-center justify-center">
                 <CreditCard className="h-9 w-9" />
