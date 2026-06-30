@@ -12,31 +12,105 @@ export const Route = createFileRoute("/receipts")({
   component: ReceiptsPage,
 });
 
+// Match these to your actual brand color (Tailwind primary), in RGB 0-255.
+const BRAND_COLOR: [number, number, number] = [79, 70, 229]; // indigo-ish — adjust to your theme
+const TEXT_DARK: [number, number, number] = [17, 24, 39]; // gray-900
+const TEXT_MUTED: [number, number, number] = [107, 114, 128]; // gray-500
+const BORDER_LIGHT: [number, number, number] = [229, 231, 235]; // gray-200
+
 function ReceiptsPage() {
   const { receipts, student, loading } = useAppContext();
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
 
   const handleDownload = () => {
     if (!selectedReceipt) return;
-    const doc = new jsPDF();
-    doc.setFontSize(22);
-    doc.text("Compssa Dues", 20, 20);
-    
-    doc.setFontSize(12);
-    const data = [
+
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginX = 20;
+    const cardWidth = pageWidth - marginX * 2;
+
+    // Header band (mirrors the modal's bg-primary header)
+    doc.setFillColor(...BRAND_COLOR);
+    doc.rect(0, 0, pageWidth, 38, "F");
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text("Compssa Dues", marginX, 24);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text("Official Payment Receipt", marginX, 31);
+
+    // Card body background (mirrors the modal's bg-white panel)
+    const cardTop = 38;
+    const cardBottom = 195;
+    doc.setDrawColor(...BORDER_LIGHT);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(marginX, cardTop, cardWidth, cardBottom - cardTop, "FD");
+
+    // Rows
+    const rowsData: { k: string; v: string }[] = [
       { k: "Index Number", v: student?.index_number || "N/A" },
       { k: "Amount Paid", v: formatGHS(selectedReceipt.amount_paid || 0) },
-      { k: "Beneficiary", v: selectedReceipt.beneficiary_account },
-      { k: "Level", v: selectedReceipt.level },
-      { k: "Provider", v: selectedReceipt.provider },
-      { k: "Date", v: new Date(selectedReceipt.issued_at).toLocaleDateString("en-GH", { dateStyle: "medium" }) }
+      { k: "Beneficiary", v: selectedReceipt.beneficiary_account || "N/A" },
+      { k: "Level", v: String(selectedReceipt.level ?? "N/A") },
+      { k: "Provider", v: selectedReceipt.provider || "N/A" },
+      {
+        k: "Date",
+        v: new Date(selectedReceipt.issued_at).toLocaleDateString("en-GH", { dateStyle: "medium" }),
+      },
+      { k: "Receipt ID", v: String(selectedReceipt.id).slice(0, 8).toUpperCase() },
     ];
 
-    data.forEach((item, index) => {
-      doc.text(`${item.k}: ${item.v}`, 20, 40 + (index * 10));
+    const rowPaddingX = 12;
+    let y = cardTop + 16;
+    const rowHeight = 13;
+
+    rowsData.forEach((item, i) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(...TEXT_MUTED);
+      doc.text(item.k, marginX + rowPaddingX, y);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...TEXT_DARK);
+      doc.text(item.v, marginX + cardWidth - rowPaddingX, y, { align: "right" });
+
+      // Divider between rows (skip after the last one)
+      if (i < rowsData.length - 1) {
+        doc.setDrawColor(...BORDER_LIGHT);
+        doc.setLineWidth(0.2);
+        doc.line(marginX + rowPaddingX, y + 5, marginX + cardWidth - rowPaddingX, y + 5);
+      }
+
+      y += rowHeight;
     });
 
-    doc.save(`Receipt_${selectedReceipt.id.slice(0, 8)}.pdf`);
+    // Amount highlight strip (extra emphasis, matches the modal's bold amount row)
+    doc.setFillColor(245, 247, 255);
+    doc.rect(marginX, cardBottom - 28, cardWidth, 20, "F");
+    doc.setTextColor(...BRAND_COLOR);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("Total Paid", marginX + rowPaddingX, cardBottom - 15);
+    doc.text(formatGHS(selectedReceipt.amount_paid || 0), marginX + cardWidth - rowPaddingX, cardBottom - 15, {
+      align: "right",
+    });
+
+    // Footer
+    doc.setTextColor(...TEXT_MUTED);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.text("Thank you for your payment. This receipt was generated electronically.", marginX, cardBottom + 12);
+    doc.text(
+      `Generated: ${new Date().toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short" })}`,
+      marginX,
+      cardBottom + 18
+    );
+
+    doc.save(`Receipt_${String(selectedReceipt.id).slice(0, 8)}.pdf`);
   };
 
   if (loading) return <AppShell title="Receipts">Loading your records...</AppShell>;
@@ -79,7 +153,7 @@ function ReceiptsPage() {
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            
+
             <div className="p-6 space-y-4 bg-white">
               <StaticRow k="Index Number" v={student.index_number || "N/A"} />
               <StaticRow k="Amount Paid" v={formatGHS(selectedReceipt.amount_paid || 0)} />

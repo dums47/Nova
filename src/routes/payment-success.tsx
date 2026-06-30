@@ -70,9 +70,11 @@ function SuccessPage() {
           </div>
 
           <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-            <Button className="gap-2 shadow-elegant">
-              <Download className="h-4 w-4" /> Download receipt
-            </Button>
+            <Link to="/receipts">
+              <Button className="gap-2 shadow-elegant">
+                <Download className="h-4 w-4" /> Download receipt
+              </Button>
+            </Link>
             <Link to="/history">
               <Button variant="outline" className="gap-2">
                 <History className="h-4 w-4" /> View history

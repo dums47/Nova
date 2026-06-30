@@ -8,6 +8,8 @@ import { Download, Search } from "lucide-react";
 import { formatGHS } from "@/lib/store";
 import { StatusPill } from "./dashboard";
 import { useAppContext } from "@/lib/AppContext"; // USE THIS
+import { jsPDF } from "jspdf";
+import { autoTable } from "jspdf-autotable";
 
 export const Route = createFileRoute("/history")({
   head: () => ({ meta: [{ title: "Payment History — Compssa Dues" }] }),
@@ -17,15 +19,15 @@ export const Route = createFileRoute("/history")({
 function HistoryPage() {
   // Use the Single Source of Truth
   const { transactions, student, loading } = useAppContext();
-  
+
   // Memoize the mapping to avoid re-calculating on every render unless transactions change
-  const txs = useMemo(() => transactions.map((t) => ({ 
-    id: t.id, 
-    reference: t.paystack_reference, 
-    date: t.created_at ?? new Date().toISOString(), 
-    level: student?.current_level ?? 300, 
-    amount: t.amount_paid, 
-    status: (t.status === "success" ? "Success" : t.status === "pending" ? "Pending" : "Failed") as "Success" | "Pending" | "Failed" 
+  const txs = useMemo(() => transactions.map((t) => ({
+    id: t.id,
+    reference: t.paystack_reference,
+    date: t.created_at ?? new Date().toISOString(),
+    level: student?.current_level ?? 300,
+    amount: t.amount_paid,
+    status: (t.status === "success" ? "Success" : t.status === "pending" ? "Pending" : "Failed") as "Success" | "Pending" | "Failed"
   })), [transactions, student]);
 
   const [q, setQ] = useState("");
@@ -46,11 +48,51 @@ function HistoryPage() {
     return r;
   }, [txs, q, filter, sort]);
 
+  const handleExportPdf = () => {
+    const doc = new jsPDF({ orientation: "landscape" });
+
+    doc.setFontSize(16);
+    doc.text("Payment History", 14, 16);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    const generatedAt = new Date().toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short" });
+    doc.text(`Generated: ${generatedAt}`, 14, 22);
+    if (student?.full_name) {
+      doc.text(`Student: ${student.full_name} (${student.index_number ?? ""})`, 14, 27);
+    }
+
+    autoTable(doc, {
+      startY: 32,
+      head: [["Transaction ID", "Reference", "Date", "Level", "Amount", "Status"]],
+      body: rows.map((t) => [
+        t.id,
+        t.reference ?? "",
+        new Date(t.date).toLocaleString("en-GH", { dateStyle: "medium", timeStyle: "short" }),
+        `Level ${t.level}`,
+        formatGHS(t.amount),
+        t.status,
+      ]),
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [30, 41, 59] }, // slate-800-ish header
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        4: { halign: "right" },
+        5: { halign: "right" },
+      },
+    });
+
+    const filename = `payment-history-${new Date().toISOString().slice(0, 10)}.pdf`;
+    doc.save(filename);
+  };
+
   if (loading) return <AppShell title="Payment history">Loading transactions...</AppShell>;
 
   return (
     <AppShell title="Payment history" subtitle="Search, filter, and export every transaction." actions={
-      <Button variant="outline" className="gap-2"><Download className="h-4 w-4" /> Export PDF</Button>
+      <Button variant="outline" className="gap-2" onClick={handleExportPdf} disabled={rows.length === 0}>
+        <Download className="h-4 w-4" /> Export PDF
+      </Button>
     }>
       <div className="rounded-2xl border border-border bg-card shadow-soft">
         <div className="flex flex-col md:flex-row md:items-center gap-3 p-4 md:p-6 border-b border-border">
