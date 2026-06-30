@@ -1,4 +1,4 @@
-@import "tailwindcss" source(none) ;
+@import "tailwindcss" source(none);
 @import "tw-animate-css";
 @source "../src";
 
@@ -8,20 +8,6 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
-
-/*
- * Design system definition.
- *
- * The @theme inline block maps CSS custom properties to Tailwind utility
- * classes (e.g. --color-primary -> bg-primary, text-primary).
- *
- * The :root and .dark blocks define the actual color values using oklch.
- * All colors MUST use oklch format.
- *
- * To add a new semantic color:
- * 1. Add the variable to :root (light value) and .dark (dark value)
- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
- */
 
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
@@ -130,12 +116,8 @@
 }
 
 @keyframes activation-bg-move {
-  0%, 100% {
-    background-position: center -50px;
-  }
-  50% {
-    background-position: center -90px;
-  }
+  0%, 100% { background-position: center -50px; }
+  50% { background-position: center -90px; }
 }
 
 .activation-hero::before {
@@ -204,8 +186,6 @@
     border-color: var(--color-border);
   }
 
-  
-
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
@@ -213,13 +193,10 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
 @keyframes logo-float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-8px);
-  }
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
 }
 
 .animate-logo {
