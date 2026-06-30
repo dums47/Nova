@@ -90,15 +90,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     // The CSS-based guard: hides the page until it's ready to show
     scripts: [
-      {
-        innerHTML: `
-          document.documentElement.style.visibility = 'hidden';
-          window.addEventListener('load', () => {
-            document.documentElement.style.visibility = 'visible';
-          });
-        `
-      }
-    ],
+  {
+    children: `
+      document.documentElement.style.visibility = 'hidden';
+      window.addEventListener('load', () => {
+        document.documentElement.style.visibility = 'visible';
+      });
+    `
+  }
+],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },

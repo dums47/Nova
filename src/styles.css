@@ -1,4 +1,4 @@
-@import "tailwindcss" source(none);
+@import "tailwindcss" source(none) ;
 @import "tw-animate-css";
 @source "../src";
 
@@ -204,10 +204,24 @@
     border-color: var(--color-border);
   }
 
+  
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+}
+@keyframes logo-float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-logo {
+  animation: logo-float 3s ease-in-out infinite;
 }

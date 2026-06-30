@@ -7,18 +7,29 @@ export function AuthCard({ title, subtitle, children, className = "" }: { title:
       <div className="flex flex-col p-6 md:p-10">
         <div className="flex flex-1 items-center justify-center py-10">
           <div className="w-full max-w-md">
-            {/* Logo */}
-            <div className="mb-6">
-              <Logo className="h-16 w-auto" />
+
+            {/* Logo centered */}
+            <div className="flex flex-col items-center mb-8">
+              <Logo className="h-20 w-auto" animate />
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{title}</h1>
-            {subtitle && <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>}
-            <div className="mt-8 rounded-2xl border border-border bg-card p-6 md:p-8 shadow-card">
+
+            {/* Welcome message */}
+            <div className="mb-8 text-center">
+              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground">
+                {title}
+              </h1>
+              {subtitle && (
+                <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-border bg-card p-6 md:p-8 shadow-card">
               {children}
             </div>
           </div>
         </div>
       </div>
+
       <div
         className="hidden lg:block relative overflow-hidden"
         style={{ background: "var(--gradient-primary)" }}
