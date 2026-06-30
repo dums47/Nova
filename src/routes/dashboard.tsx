@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type ReactNode } from "react";
 import { AppShell } from "@/components/AppShell";
+import { Logo } from "@/components/Logo";
 import { formatGHS } from "@/lib/store";
 import { useAppData } from "@/lib/useAppData";
 import { Button } from "@/components/ui/button";
@@ -46,22 +47,9 @@ function DashboardPage() {
 
   const b = balances;
 
-  // Read directly from the raw DB field set by the update_student_balance
-  // trigger. Do NOT fall back to b.outstanding — that value is clamped
-  // with Math.max(0, ...) in useAppData/AppContext and can never be
-  // negative, which would silently break the "fully paid" detection below.
   const rawOutstandingNum = Number(student?.outstanding_balance ?? 0);
-  const isFullyPaid = rawOutstandingNum < 0; // negative DB value = overpaid / cleared
+  const isFullyPaid = rawOutstandingNum < 0;
   const displayOutstanding = Math.round(Math.abs(rawOutstandingNum));
-
-  // TEMPORARY DEBUG — remove once confirmed working.
-  console.log("DEBUG outstanding_balance:", {
-    raw: student?.outstanding_balance,
-    typeofRaw: typeof student?.outstanding_balance,
-    parsed: rawOutstandingNum,
-    isFullyPaid,
-    displayOutstanding,
-  });
 
   return (
     <AppShell
@@ -76,7 +64,6 @@ function DashboardPage() {
         </Link>
       }
     >
-      {/* Stat cards — 1 col mobile, 2 col tablet, 4 col desktop */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Outstanding balance"
@@ -113,7 +100,6 @@ function DashboardPage() {
         />
       </div>
 
-      {/* Level tracker + Quick actions — stacked on mobile, side by side on large */}
       <div className="mt-6 grid gap-6 grid-cols-1 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-4 md:p-6 shadow-soft">
           <div>
@@ -133,16 +119,24 @@ function DashboardPage() {
               return (
                 <div key={fee.id} className="rounded-xl border border-border p-4">
                   <div className="flex items-center justify-between gap-2">
-                    <div
-                      className={`h-10 w-10 shrink-0 rounded-lg flex items-center justify-center text-center font-semibold text-[10px] leading-tight px-1 break-words ${
-                        fully
-                          ? "bg-success/15 text-success"
-                          : partly
-                          ? "bg-warning/15 text-warning"
-                          : "bg-secondary text-muted-foreground"
-                      }`}
-                    >
-                      {fee.fee_name}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`h-10 w-10 shrink-0 rounded-lg flex items-center justify-center p-1.5 ${
+                          fully
+                            ? "bg-success/15"
+                            : partly
+                            ? "bg-warning/15"
+                            : "bg-secondary"
+                        }`}
+                      >
+                        <Logo className="h-full w-full object-contain" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{fee.fee_name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatGHS(paid)} / {formatGHS(targetAmount)}
+                        </div>
+                      </div>
                     </div>
                     <Pill tone={fully ? "success" : partly ? "warning" : "muted"}>
                       {fully ? "Paid" : partly ? "Partial" : "Pending"}
@@ -162,23 +156,23 @@ function DashboardPage() {
 
         <div className="rounded-2xl border border-border bg-card p-4 md:p-6 shadow-soft">
           <h2 className="text-lg font-semibold">Quick actions</h2>
-        <div className="mt-4 flex flex-col gap-4">
-  <Link to="/payment">
-    <Button className="w-full h-11 justify-between gap-3 shadow-elegant">
-      Pay now <ArrowUpRight className="h-4 w-4" />
-    </Button>
-  </Link>
-  <Link to="/receipts">
-    <Button variant="outline" className="w-full h-11 justify-between gap-3">
-      Download receipt <Download className="h-4 w-4" />
-    </Button>
-  </Link>
-  <Link to="/history">
-    <Button variant="outline" className="w-full h-11 justify-between gap-3">
-      View history <History className="h-4 w-4" />
-    </Button>
-  </Link>
-</div>
+          <div className="mt-4 flex flex-col gap-4">
+            <Link to="/payment">
+              <Button className="w-full h-11 justify-between gap-3 shadow-elegant">
+                Pay now <ArrowUpRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link to="/receipts">
+              <Button variant="outline" className="w-full h-11 justify-between gap-3">
+                Download receipt <Download className="h-4 w-4" />
+              </Button>
+            </Link>
+            <Link to="/history">
+              <Button variant="outline" className="w-full h-11 justify-between gap-3">
+                View history <History className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
           <div className="mt-6 rounded-xl bg-gradient-to-br from-primary to-accent p-5 text-primary-foreground">
             <div className="text-xs uppercase tracking-wider opacity-80">Tip</div>
             <div className="mt-1 font-semibold">Clear all in one click</div>
@@ -189,7 +183,6 @@ function DashboardPage() {
         </div>
       </div>
 
-      {/* Recent transactions table — horizontal scroll on mobile */}
       <div className="mt-6 rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
         <div className="flex items-center justify-between p-4 md:p-6">
           <div>
@@ -203,7 +196,6 @@ function DashboardPage() {
           </Link>
         </div>
 
-        {/* Mobile card view */}
         <div className="md:hidden divide-y divide-border">
           {txs.slice(0, 5).length === 0 && (
             <p className="px-4 py-6 text-sm text-muted-foreground text-center">No transactions yet.</p>
@@ -229,7 +221,6 @@ function DashboardPage() {
           ))}
         </div>
 
-        {/* Desktop table view */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-secondary/40 text-xs uppercase tracking-wider text-muted-foreground">

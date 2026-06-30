@@ -10,7 +10,7 @@ export function AuthCard({ title, subtitle, children, className = "" }: { title:
 
             {/* Logo centered */}
             <div className="flex flex-col items-center mb-8">
-              <Logo className="h-20 w-auto" animate />
+              <Logo className="h-30 w-auto" animate />
             </div>
 
             {/* Welcome message */}

@@ -1,12 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/lib/supabase";
-import { useAppContext } from "@/lib/AppContext";
-import { Upload, UserPlus, CheckCircle2, XCircle, Loader2, FileText, X } from "lucide-react";
+import { Upload, UserPlus, CheckCircle2, XCircle, Loader2, FileText, X, RefreshCw } from "lucide-react";
 
 export const Route = createFileRoute("/import-students")({
   head: () => ({ meta: [{ title: "Import Students — Compssa Dues" }] }),
@@ -14,6 +13,14 @@ export const Route = createFileRoute("/import-students")({
 });
 
 type ResultRow = { index_number: string; status: "success" | "error"; message: string };
+type StudentRow = {
+  id: string;
+  full_name: string;
+  index_number: string;
+  email: string;
+  current_level: number;
+  department_id: number | null;
+};
 
 const EMPTY_FORM = {
   full_name: "",
@@ -30,9 +37,26 @@ function isAllowedEmail(email: string) {
 }
 
 function ImportStudentsPage() {
-  const { students } = useAppContext();
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [studentsLoading, setStudentsLoading] = useState(true);
 
-  // CSV state
+  const fetchStudents = useCallback(async () => {
+    setStudentsLoading(true);
+    const { data, error } = await supabase
+      .from("studenttable")
+      .select("id, full_name, index_number, email, current_level, department_id")
+      .order("full_name", { ascending: true });
+
+    if (!error && data) {
+      setStudents(data as StudentRow[]);
+    }
+    setStudentsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvLoading, setCsvLoading] = useState(false);
@@ -40,7 +64,6 @@ function ImportStudentsPage() {
   const [csvError, setCsvError] = useState<string | null>(null);
   const [showCsvModal, setShowCsvModal] = useState(false);
 
-  // Single student modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [singleLoading, setSingleLoading] = useState(false);
@@ -79,7 +102,6 @@ function ImportStudentsPage() {
 
         const email = record["email"] ?? "";
 
-        // Validate domain before attempting any insert
         if (!email) {
           results.push({ index_number, status: "error", message: "Missing email." });
           continue;
@@ -97,8 +119,6 @@ function ImportStudentsPage() {
         const rawLevel = record["current_level"] ?? record["level"] ?? "";
 
         try {
-          // NOTE: auth_user_id is intentionally omitted — it is only ever
-          // set later when the student links their auth.users account.
           const { error } = await supabase.from("studenttable").upsert(
             {
               email,
@@ -121,6 +141,10 @@ function ImportStudentsPage() {
       }
 
       setCsvResults(results);
+
+      if (results.some((r) => r.status === "success")) {
+        await fetchStudents();
+      }
     } catch {
       setCsvError("Failed to parse CSV. Please check the file format.");
     } finally {
@@ -144,7 +168,6 @@ function ImportStudentsPage() {
 
     setSingleLoading(true);
     try {
-      // NOTE: auth_user_id is intentionally omitted here too.
       const { error } = await supabase.from("studenttable").upsert(
         {
           full_name: form.full_name.trim(),
@@ -160,6 +183,8 @@ function ImportStudentsPage() {
 
       setSingleSuccess(`Student "${form.full_name}" added successfully.`);
       setForm(EMPTY_FORM);
+
+      await fetchStudents();
     } catch (err: any) {
       setSingleError(err.message ?? "Failed to add student.");
     } finally {
@@ -190,6 +215,9 @@ function ImportStudentsPage() {
       subtitle="Manage and import students."
       actions={
         <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={fetchStudents} disabled={studentsLoading} title="Refresh list">
+            <RefreshCw className={`h-4 w-4 ${studentsLoading ? "animate-spin" : ""}`} />
+          </Button>
           <Button variant="outline" className="gap-2" onClick={() => setShowCsvModal(true)}>
             <Upload className="h-4 w-4" /> Upload CSV
           </Button>
@@ -199,11 +227,12 @@ function ImportStudentsPage() {
         </div>
       }
     >
-      {/* Students table */}
       <div className="rounded-2xl border border-border bg-card shadow-soft overflow-hidden">
         <div className="p-4 md:p-6 border-b border-border">
           <h2 className="text-lg font-semibold">List of students</h2>
-          <p className="text-sm text-muted-foreground">{students.length} registered students</p>
+          <p className="text-sm text-muted-foreground">
+            {studentsLoading ? "Loading…" : `${students.length} registered students`}
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -217,7 +246,7 @@ function ImportStudentsPage() {
               </tr>
             </thead>
             <tbody>
-              {students.length === 0 && (
+              {!studentsLoading && students.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">
                     No students yet. Import a CSV or add one manually.
@@ -238,7 +267,6 @@ function ImportStudentsPage() {
         </div>
       </div>
 
-      {/* Add Student Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl">
@@ -328,7 +356,6 @@ function ImportStudentsPage() {
         </div>
       )}
 
-      {/* CSV Upload Modal */}
       {showCsvModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-2xl">
